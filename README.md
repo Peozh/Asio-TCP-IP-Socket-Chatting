@@ -30,7 +30,12 @@ leave
 logout
 exit
 ```
-
+## Default client/room info
+```
+client1 : password1 { room1 }
+client2 : password2 { room1 }
+room1 : { client1 client2 }
+```
 ## Examples
 ```
 <client1>
