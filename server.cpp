@@ -84,7 +84,7 @@ std::string processCommand(std::string& clientId, const std::string& commands, s
             if (rooms.count(roomId) == 0) return "fail send";
             for (auto targetClientId : rooms.at(roomId).clientIds)
             {
-                std::lock_guard<std::mutex> lg(*clients.at(targetClientId).mtx);
+                std::lock_guard<std::mutex> lg2(*clients.at(targetClientId).mtx);
                 clients.at(targetClientId).receivedMessages.push(command);
                 // todo: thread cv notify to work
             }
@@ -103,7 +103,7 @@ std::string processCommand(std::string& clientId, const std::string& commands, s
         {
             std::lock_guard<std::mutex> lg(ClientInfo::mtxClients);
             for (const auto roomId : clients.at(clientId).roomIds) { 
-                std::lock_guard<std::mutex> lg(*clients.at(clientId).mtx);
+                std::lock_guard<std::mutex> lg2(*clients.at(clientId).mtx);
                 command += " " + roomId; 
             }
         }
@@ -135,16 +135,16 @@ std::string processCommand(std::string& clientId, const std::string& commands, s
             bool alreadyInvited = false;
             for (auto targetClientId : rooms.at(roomId).clientIds)
             { 
-                std::lock_guard<std::mutex> lg(*clients.at(targetClientId).mtx);
+                std::lock_guard<std::mutex> lg2(*clients.at(targetClientId).mtx);
                 clients.at(targetClientId).receivedMessages.push(command);
                 if (strcmp(targetClientId.data(), userId.data()) == 0) alreadyInvited = true;
             }
             if (!alreadyInvited) {
-                std::lock_guard<std::mutex> lg(*clients.at(userId).mtx);
+                std::lock_guard<std::mutex> lg2(*clients.at(userId).mtx);
                 clients.at(userId).roomIds.push_back(roomId);
             }
             if (!alreadyInvited) {
-                std::lock_guard<std::mutex> lg(*rooms.at(roomId).mtx);
+                std::lock_guard<std::mutex> lg2(*rooms.at(roomId).mtx);
                 rooms.at(roomId).clientIds.push_back(userId);
             }
         }
@@ -173,21 +173,22 @@ std::string processCommand(std::string& clientId, const std::string& commands, s
         std::cout << "log(): " << log << std::endl;
         {
             std::lock_guard<std::mutex> lg(RoomInfo::mtxRooms);
-            if (rooms.count(roomId) != 0) return "fail delete";
-        }
-        {
-            std::lock_guard<std::mutex> lg(*rooms.at(roomId).mtx);
-            if (rooms.at(roomId).clientIds.size() == 1) rooms.erase(roomId); // todo: lock
+            if (rooms.count(roomId) == 0) { return "fail delete"; }
+            {
+                std::lock_guard<std::mutex> lg2(*rooms.at(roomId).mtx);
+                if (rooms.at(roomId).clientIds.size() == 1) { rooms.erase(roomId); }
+            }
         }
         {
             std::lock_guard<std::mutex> lg(ClientInfo::mtxClients);
+            std::lock_guard<std::mutex> lg2(*clients.at(clientId).mtx);
             for (auto iter = clients.at(clientId).roomIds.begin(); iter != clients.at(clientId).roomIds.end(); ++iter) {
                 if (*iter == roomId) {
-                    std::lock_guard<std::mutex> lg(*clients.at(clientId).mtx);
-                    clients.at(clientId).roomIds.erase(iter);
+                    clients.at(clientId).roomIds.erase(iter); 
+                    break;
                 }
             }
-        }
+        } 
         return "success delete";
     }
     else if (strcmp(mainCommand.data(), "login") == 0) { // locked
@@ -202,6 +203,7 @@ std::string processCommand(std::string& clientId, const std::string& commands, s
         {
             std::lock_guard<std::mutex> lg(*clients.at(userId).mtx);
             if (strcmp(clients.at(userId).clientPassword.data(), userPassword.data()) == 0) { std::cout << "log(): " << log << " .. success" << std::endl; clientId = userId; }
+            else { std::cout << "log(): " << log << " .. failed" << std::endl; return "fail login"; }
         }
         return "success login";
     }
